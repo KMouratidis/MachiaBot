@@ -1,7 +1,21 @@
 import sqlite3
-from nltk import WordNetLemmatizer
-from nltk.tokenize import word_tokenize
+from data_processing import process_data
 
+def create_sqlite_db():
+    data = process_data()
+
+    conn = sqlite3.connect("MachiaBot.db")
+    curr = conn.cursor()
+
+    curr.execute("CREATE TABLE IF NOT EXISTS dataset (speaker TEXT, dialogue TEXT)")
+
+    for speaker, dialogue in data:
+        curr.execute("INSERT INTO dataset VALUES (?, ?)", (speaker, dialogue))
+
+    conn.commit()
+
+    curr.close()
+    conn.close()
 
 # TODO: add keyword argument about the speaker when I get more data
 def fetch_all(db="MachiaBot.db"):
@@ -22,16 +36,5 @@ def fetch_all(db="MachiaBot.db"):
 
     return machiavelli_, montesquieu_
 
-
-machiavelli, montesquieu = fetch_all()
-
-machia_tokens = [word_tokenize(sent) for sent in machiavelli]
-
-# Lemmatize words
-lemmatizer = WordNetLemmatizer()
-machia_lemmas = [[lemmatizer.lemmatize(word) for word in sent] for sent in machia_tokens]
-
-for tokens in machia_lemmas[:5]:
-    print(tokens)
-
-# TODO: tokenize words by creating a voting model (maybe weighted) aggregating various tokenizers
+if __name__ == "__main__":
+    create_sqlite_db()
