@@ -2,7 +2,7 @@ from sqlite_utils import fetch_all
 from collections import Counter, defaultdict
 import numpy as np
 
-from nltk import word_tokenize
+from nltk import word_tokenize, sent_tokenize
 from nltk import WordNetLemmatizer
 from nltk import wordnet as wn
 from nltk.collocations import FreqDist, ngrams
@@ -18,189 +18,200 @@ machiavelli, montesquieu = fetch_all()
 stop_words = stopwords.words("english")
 
 
-def _basic_assertions(corpus, advanced_assertions=False):
-    """
-    Every subsequent function will use this to check if the input is in the correct format.
-    The argument advanced_assertions is meant for functions that expect a list of lists with string tokens.
-    """
+class Corpus_:
 
-    assert isinstance(corpus, list), "Input `corpus` is not a list."
+    def __init__(self, corpus, raw=False):
+        """
+        The Corpus_ class is to be initialized with a list of strings representing sentences.
+        If input text is a single string, set raw=True.
+        """
 
-    # TODO: Should other data types be included for tokens, somehow?
-    if advanced_assertions:
-        assert (all(isinstance(sent, list) for sent in corpus)), "Sentences are not lists."
-        assert (all(isinstance(token, str) for sent in corpus for token in sent)), "Tokens are not strings."
-
-
-def tokenize(text, remove_stopwords=False, remove_punctuation=True, lower=True):
-    """
-    Helper function to tokenize text with various optional arguments.
-
-    :param text: Should be a list of strings (sentences, documents, etc),
-           e.g.: [["Going a trip around town."], ["It is a wonderful experience."]].
-    :param remove_stopwords: Remove common words. Using nltk's stopwords for English. Optional, default=False.
-    :param remove_punctuation: Removes punctuation. Optional, default=True.
-    :param lower: Lower the text. Optional, default=True.
-    :return: Tokenized text, a list of lists with tokens, e.g.: [["d", "w"], ["a"]].
-    """
-
-    # Check that input is correct
-    _basic_assertions(text)
-    assert (all(isinstance(sent, str) for sent in text)), "List element is not a string."
-
-    if lower and remove_punctuation:
-        # simple_preprocess lowers, removes punctuation, and tokenizes, all-in-one and much faster
-        tokens = [simple_preprocess(sent) for sent in text]
-    elif lower:
-        tokens = [word_tokenize(sent.lower()) for sent in text]
-    else:
-        tokens = [[word_tokenize(word) for word in sent] for sent in text]
-
-    if remove_stopwords:
-        tokens = [[word for word in sent if word not in stop_words] for sent in tokens]
-
-    return tokens
-
-
-def _synset_lemmatizer(word):
-    """
-    Simplify words by taking their simpler or most common synsets. Words up to 3 letters do not get modified.
-
-    Examples:
-        in: "hello", out: "hello"
-        in: "distanced", out: "distance"
-        in: "spaces", out: "space"
-        in: "told", out: "tell"
-    It's not perfect:
-        in: "comprehend", out: "grok"
-    """
-
-    # don't modify small words
-    if len(word) <= 3:
-        return word
-
-    try:
-        # get synsets
-        synsets_list = wn.wordnet.synsets(word)
-
-        # clear synsets: get names as strings
-        synsets_list = [w.name().split(".")[0] for w in synsets_list]
-
-        word_counter = Counter(synsets_list)
-
-        # if there are many words
-        if len(word_counter) > 1:
-            word_freq1, word_freq2 = word_counter.most_common(2)  # each is a tuple: ("word", counts)
-
-            # if they have the same frequencies: pick the shorter word, else pick the first
-            if word_freq1[1] == word_freq2[1]:
-                if len(word_freq1[0]) <= len(word_freq2[0]):
-                    return word_freq1[0]
-                else:
-                    return word_freq2[0]
-            else:
-                return word_freq1[0]
-
-        # if there is only one word
+        if not raw:
+            assert isinstance(corpus, list), "Input `corpus` is not a list."
+            assert (all(isinstance(sent, str) for sent in corpus)), "Sentences are not strings."
         else:
-            return word_counter.most_common()[0][0]
+            assert isinstance(corpus, str), "Input `corpus` is not a string."
+            corpus = sent_tokenize(corpus)
 
-    # if there are no synsets, return the word as it is
-    except IndexError:
-        return word
+        self.corpus = corpus
+        self.tokenized = self.tokenize(corpus, ret=True)
+        self.lemmatized = self.lemmatize(ret=True)
+        self.mappings = self.lemmatization_mappings(ret=True)
+        self.topics, self.topic_model = self.get_topics(ret=True)
+        self.token_frequency_dict, self.lemma_frequency_dict = self.statistics(ret=True)
+
+    def tokenize(self, remove_stopwords=False, remove_punctuation=True, lower=True, ret=False):
+        """
+        Helper method to tokenize text with various optional arguments.
+
+        :param remove_stopwords: Remove common words. Using nltk's stopwords for English. Optional, default=False.
+        :param remove_punctuation: Removes punctuation. Optional, default=True.
+        :param lower: Lower the text. Optional, default=True.
+        :param ret: Set to True if you need the method to return the tokens, default=False.
+        :return: If ret=True, tokenized text, can also be accessed as an attribute.
+        """
+
+        assert (all(isinstance(sent, str) for sent in text)), "List element is not a string."
+
+        if lower and remove_punctuation:
+            # simple_preprocess lowers, removes punctuation, and tokenizes, all-in-one and much faster
+            tokens = [simple_preprocess(sent) for sent in text]
+        elif lower:
+            tokens = [word_tokenize(sent.lower()) for sent in text]
+        else:
+            tokens = [[word_tokenize(word) for word in sent] for sent in text]
+
+        if remove_stopwords:
+            tokens = [[word for word in sent if word not in stop_words] for sent in tokens]
+
+        if ret:
+            return tokens
+        else:
+            self.tokenized = tokens
+
+    def _synset_lemmatizer(self, word):
+        """
+        Simplify words by taking their simpler or most common synsets. Words up to 3 letters do not get modified.
+
+        Examples:
+            in: "hello", out: "hello"
+            in: "distanced", out: "distance"
+            in: "spaces", out: "space"
+            in: "told", out: "tell"
+        It's not perfect:
+            in: "comprehend", out: "grok"
+        """
+
+        # don't modify small words
+        if len(word) <= 3:
+            return word
+
+        try:
+            # get synsets
+            synsets_list = wn.wordnet.synsets(word)
+
+            # clear synsets: get names as strings
+            synsets_list = [w.name().split(".")[0] for w in synsets_list]
+
+            word_counter = Counter(synsets_list)
+
+            # if there are many words
+            if len(word_counter) > 1:
+                word_freq1, word_freq2 = word_counter.most_common(2)  # each is a tuple: ("word", counts)
+
+                # if they have the same frequencies: pick the shorter word, else pick the first
+                if word_freq1[1] == word_freq2[1]:
+                    if len(word_freq1[0]) <= len(word_freq2[0]):
+                        return word_freq1[0]
+                    else:
+                        return word_freq2[0]
+                else:
+                    return word_freq1[0]
+
+            # if there is only one word
+            else:
+                return word_counter.most_common()[0][0]
+
+        # if there are no synsets, return the word as it is
+        except IndexError:
+            return word
+
+    def lemmatize(self, lemmatizer="synset", ret=False):
+        # TODO: add more lemmatizers
+        """
+        Take a corpus's tokenized form and lemmatize each word based
+        on selected lemmatizer. If ret is True, values are returned.
+
+        :param tokens: Should be a list of lists with strings, e.g.: [["d", "w"], ["a"]].
+        :param lemmatizer: There are various lemmatizers available, passed as string arguments:
+            - 'wordnet': Uses nltk.WordNetLemmatizer
+            - 'synset': Uses a custom implementation. Takes a word and returns its most common (or simplest) synset
+        :param ret: Set to True if you need the method to return the lemmatized tokens, default=False.
+        :return: List of lists with lemmatized tokens,  e.g.: [["d", "w"], ["a"]].
+        """
+
+        if lemmatizer == "wordnet":
+            wnl = WordNetLemmatizer()
+            _lemmatized = [[wnl.lemmatize(word) for word in sent] for sent in self.tokenized]
+        elif lemmatizer == "synset":
+            _lemmatized = [[self._synset_lemmatizer(word) for word in sent] for sent in self.tokenized]
+        else:
+            # return 'synset'
+            print("Lemmatizer not recognized, using 'synset'.")
+            _lemmatized = [[self._synset_lemmatizer(word) for word in sent] for sent in self.tokenized]
+
+        if ret:
+            return _lemmatized
+        else:
+            self.lemmatized = _lemmatized
 
 
-def lemmatize(corpus, lemmatizer="synset"):
-    # TODO: add more lemmatizers
-    """
-    Take a corpus and return it in the same format with each word lemmatized.
+    def lemmatization_mappings(self, lemmatized=self.lemmatized, ret=False):
+        """
+        If ret is True this method returns a defaultdict where the keys are the words in the
+        lemmatized text and the values are lists of words from the original text that were
+        transformed to said new word. If ret is False, then the `mappings` attribute gets updated.
 
-    :param tokens: Should be a list of lists with strings, e.g.: [["d", "w"], ["a"]].
-    :param lemmatizer: There are various lemmatizers available, passed as string arguments:
-        - 'wordnet': Uses nltk.WordNetLemmatizer
-        - 'synset': Uses a custom implementation. Takes a word and returns its most common (or else simplest) synset.
-    :return: List of lists with lemmatized tokens,  e.g.: [["d", "w"], ["a"]].
-    """
+        :param lemmatized: List of lists with string tokens, e.g.: [["d", "w"], ["a"]], default: self.lemmatized.
+        :return: A defaultdict of word mappings, e.g.: {"new":["old1", "old2"]}.
+        """
 
-    # Check that input is correct
-    _basic_assertions(corpus, advanced_assertions=True)
+        word_mappings = defaultdict(list)
 
-    if lemmatizer == "wordnet":
-        wnl = WordNetLemmatizer()
-        lemmatized_tokens = [[wnl.lemmatize(word) for word in sent] for sent in corpus]
-    elif lemmatizer == "synset":
-        lemmatized_tokens = [[_synset_lemmatizer(word) for word in sent] for sent in corpus]
-    else:
-        # return 'synset'
-        print("Lemmatizer not recognized, using 'synset'.")
-        lemmatized_tokens = [[_synset_lemmatizer(word) for word in sent] for sent in corpus]
+        for (old, new) in zip([w for sent in self.tokenized for w in sent],
+                              [w for sent in lemmatized for w in sent]):
 
-    return lemmatized_tokens
+            if old not in word_mappings[new]:
+                word_mappings[new].append(old)
 
+        if ret:
+            return word_mappings
+        else:
+            self.mappings = word_mappings
 
-def synset_lemmatization_mappings(original, lemmatized):
-    """
-    Helper function that takes a text transformed with synset lemmatization and returns a defaultdict where
-    the keys are the words in the lemmatized text and the values are lists of words from the original text
-    that were transformed to said new word.
+    def get_topics(self, algorithm="lda", no_features=1500, no_topics=30, no_top_words=10, ret=False):
+        """
+        Take a list of sentences / documents and return a list of topics, and the created model.
 
-    :param original: List of lists with string tokens, e.g.: [["d", "w"], ["a"]].
-    :param lemmatized: List of lists with string tokens, e.g.: [["d", "w"], ["a"]].
-    :return: A defaultdict of word mappings, e.g.: {"new":["old1", "old2"]}.
-    """
-    for corpus in [original, lemmatized]:
-        _basic_assertions(corpus, advanced_assertions=True)
+        :param text: A list of strings / sentences / documents.
+        :param no_topics: How many topics do we want to keep track of, int, default=30.
+        :param no_features: How many words we want to keep track of, int, default=1000.
+        :param no_top_words: How many words to keep track of per topic, int, default=10.
+        :return: A list of lists with keywords representing a topic, and the model instance.
+        """
 
-    word_mappings = defaultdict(list)
+        # TODO: add other ways for topic modelling
+        if algorithm == "lda":
 
-    for (old, new) in zip([w for sent in original for w in sent],
-                          [w for sent in lemmatized for w in sent]):
+            tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
+                                            max_features=no_features,
+                                            stop_words='english')
 
-        if old not in word_mappings[new]:
-            word_mappings[new].append(old)
+            # Transform text into sparse counts
+            tf = tf_vectorizer.fit_transform(self.corpus)
+            # Keep track of original words
+            tf_feature_names = tf_vectorizer.get_feature_names()
 
-    return word_mappings
+            # Create LDA model and fit it
+            model = LatentDirichletAllocation(n_components=no_topics, max_iter=30,
+                                            learning_method='batch', evaluate_every=128,
+                                            perp_tol=1e-3, learning_offset=50.).fit(tf)
 
-# TODO: Maybe convert to class (the whole file?) since it will have a better interface and less programming headache
-def get_topics(text, algorithm="lda", no_features=1500, no_topics=30, no_top_words=10):
-    """
-    Take a list of sentences / documents and return a list of topics, and the created model.
+            topics = [[tf_feature_names[i] for i in topic.argsort()[:-no_top_words - 1:-1]] for topic in model.components_]
 
-    :param text: A list of strings / sentences / documents.
-    :param no_topics: How many topics do we want to keep track of, int, default=30.
-    :param no_features: How many words we want to keep track of, int, default=1000.
-    :param no_top_words: How many words to keep track of per topic, int, default=10.
-    :return: A list of lists with keywords representing a topic, and the model instance.
-    """
-
-    # TODO: add other ways for topic modelling
-    _basic_assertions(text)
-    assert (all(isinstance(sent, str) for sent in text)), "List element is not a string."
-
-    if algorithm == "lda":
-
-        tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
-                                        max_features=no_features,
-                                        stop_words='english')
-
-        # Transform text into sparse counts
-        tf = tf_vectorizer.fit_transform(text)
-        # Keep track of original words
-        tf_feature_names = tf_vectorizer.get_feature_names()
-
-        # Create LDA model and fit it
-        lda = LatentDirichletAllocation(n_components=no_topics, max_iter=30,
-                                        learning_method='batch', evaluate_every=128,
-                                        perp_tol=1e-3, learning_offset=50.).fit(tf)
-
-        topics = [[tf_feature_names[i] for i in topic.argsort()[:-no_top_words - 1:-1]] for topic in lda.components_]
-
-        return topics, lda
+        if ret:
+            return topics, model
+        else:
+            self.topics, self.topic_model = topics, model
 
 
+    def statistics(self, ret=False):
+        # TODO: add more
+        token_frequency_dict = FreqDist([word for sent in self.tokenized for word in sent])
+        lemma_frequency_dict = FreqDist([word for sent in self.lemmatized for word in sent])
 
-def statistics(corpus):
-    # TODO: add more
-    frequency_dict = FreqDist([word for sent in corpus for word in sent])
-
-    return frequency_dict
+        if ret:
+            return token_frequency_dict, lemma_frequency_dict
+        else:
+            self.token_frequency_dict = token_frequency_dict
+            self.lemma_frequency_dict = lemma_frequency_dict
