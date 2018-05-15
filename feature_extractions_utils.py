@@ -1,6 +1,9 @@
 from sqlite_utils import fetch_all
 from collections import Counter, defaultdict
+from PIL import Image
 import numpy as np
+from wordcloud import WordCloud
+import os
 import spacy
 
 from nltk import word_tokenize, sent_tokenize
@@ -19,6 +22,43 @@ from sklearn.feature_extraction.text import CountVectorizer
 machiavelli, montesquieu = fetch_all()
 
 stop_words = stopwords.words("english")
+
+
+# use https://burner.bonanza.com/ if you need to create masks
+def get_wordcloud(text, *, background_color="white", mask_path="", additional_stopwords=[],
+                  max_words=2000, save=True, ret=True, **kwargs):
+    """
+    Utility that takes a text string as input and returns a WordCloud instance. Also saves the image.
+
+    :param text: Text string
+    :param background_color: String, default='white'
+    :param mask_path: String, image path
+    :param additional_stopwords: List of strings
+    :param max_words: Int, default=2000
+    :param save: Boolean, if you want to save the file. New name: "{filename}_wordcloud.{ext}"
+    :param ret: if you want to return the WordCloud instance
+    :param kwargs: Additional keywords arguments to be passed when creating the WordCloud.
+    """
+
+    stopwords_set = set(stop_words)
+    if additional_stopwords:
+        additional_stopwords = set(additional_stopwords)
+        stopwords_set = stopwords_set.union(additional_stopwords)
+
+    if mask_path:
+        mask = np.array(Image.open(mask_path))
+
+    wc = WordCloud(background_color=background_color, max_words=max_words,
+                   stopwords=stopwords_set, mask=mask, **kwargs)
+    wc.generate(text)
+
+    if save:
+        filename, ext = os.path.splitext("path_to_file")
+        wc.to_file("{}_wordcloud.{}".format(filename, ext))
+
+    if ret:
+        return wc
+
 
 # TODO: Refactor code such that each method can be called on arbitrary text, not just on self.attributes.
 class Corpus_:
@@ -47,11 +87,14 @@ class Corpus_:
 
     def add_corpus(self, corpus, corpus_name, also_process=True, raw=False, tokenized=False):
         """
+        Takes a text as input and adds it to the corpus. If also_process (true by default),
+        text is preprocessed and tokenized and lemmatized copies are created.
 
-        :param corpus:
-        :param corpus_name:
-        :param also_process:
-        :param raw:
+        :param corpus: A list of strings (sentences or words)
+        :param corpus_name: String, the name of the corpus.
+        :param also_process: Boolean, default=True
+        :param raw: Boolean, if true corpus is expected to be a string
+        :param tokenized: Boolean, if true corpus is expected to be tokenized (list of lists with strings)
         :return:
         """
 

@@ -2,7 +2,6 @@ from weather import Weather, Unit
 
 def get_weather(location="Thessaloniki", *, units=Unit.CELSIUS):
     """
-
     A function that takes a location as input and returns the weather by quering the Yahoo API.
     Location can be given either by string, or integer (see WOEID via http://weather.yahoo.com)
     or tuple containing 2 numbers (latitude, longitude)

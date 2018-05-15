@@ -4,6 +4,7 @@
       <w>lemmatize</w>
       <w>lemmatizer</w>
       <w>tokenizers</w>
+      <w>wordcloud</w>
     </words>
   </dictionary>
 </component>
