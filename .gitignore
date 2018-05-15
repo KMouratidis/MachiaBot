@@ -1,4 +1,10 @@
-Embeddings_example.ipynb
+*.ipynb
 temp.txt
-Data exploration and feature engineering .ipynb
+__pycache__
+.idea
+
 .idea/*
+*.bin
+*.hdf5
+glove*
+*.json

@@ -1,6 +1,7 @@
 import sqlite3
 from data_processing import process_data
 
+# TODO: Add nltk corpus to the DB for quicker lookup (?)
 def create_sqlite_db():
     data = process_data()
 
