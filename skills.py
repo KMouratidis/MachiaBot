@@ -1,4 +1,5 @@
 from weather import Weather, Unit
+import geocoder
 
 def get_weather(location="Thessaloniki", *, units=Unit.CELSIUS):
     """
@@ -30,6 +31,11 @@ def get_weather(location="Thessaloniki", *, units=Unit.CELSIUS):
     return city, weather_condition.text
 
 
+def get_location(loc="me"):
+    location = str(geocoder.ip(loc).city)
+    return location
+
 
 if __name__ == "__main__":
-    print(get_weather("Athens"))
+    loc = get_location()
+    print(get_weather(loc))
