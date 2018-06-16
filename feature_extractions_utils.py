@@ -11,6 +11,7 @@ from nltk import WordNetLemmatizer
 from nltk import wordnet as wn
 from nltk.collocations import FreqDist, ngrams
 from nltk.corpus import stopwords
+from nltk.sentiment.vader import SentimentIntensityAnalyzer as SIA
 
 from gensim.utils import simple_preprocess
 from gensim.corpora import Dictionary
@@ -22,7 +23,6 @@ from sklearn.feature_extraction.text import CountVectorizer
 machiavelli, montesquieu = fetch_all()
 
 stop_words = stopwords.words("english")
-
 
 # use https://burner.bonanza.com/ if you need to create masks
 def get_wordcloud(text, *, background_color="white", mask_path="", additional_stopwords=[],
@@ -60,7 +60,30 @@ def get_wordcloud(text, *, background_color="white", mask_path="", additional_st
         return wc
 
 
+def get_polarity(sent):
+    """
+    A helper function that, given a sentence, computes the polarity (negative, positive, or neutral sentiment).
+    Based on nltk.sentiment.vader.SentimentIntensityAnalyzer.
+
+    :param sent: A string.
+    :return: A string with the most probable sentiment, and the dict with all values.
+
+    Example:
+    >>> get_polarity("I don't feel well.")
+    'neu', {'neg': 0.476, 'neu': 0.524, 'pos': 0.0, 'compound': -0.2057}
+    >>> get_polarity("The weather today is great!")
+    'pos', {'neg': 0.0, 'neu': 0.477, 'pos': 0.523, 'compound': 0.6588}
+    """
+
+    sia = SIA()
+    scores = sia.polarity_scores(sent)
+
+    return max(scores), scores
+
+
+# TODO: This whole class probably needs to be moved to another file
 # TODO: Refactor code such that each method can be called on arbitrary text, not just on self.attributes.
+# TODO: Store individual corpuses using inner classes (?), aka the Composition Design Pattern
 class Corpus_:
 
     def __init__(self,):
