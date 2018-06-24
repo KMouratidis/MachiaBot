@@ -20,6 +20,31 @@ from gensim.models.ldamodel import LdaModel
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
 
+from Levenshtein import distance
+from autocorrect import spell
+from operator import itemgetter
+from nltk.corpus import words
+
+
+word_dict = words.words() # 236.736 words
+
+def calc_distances(word, dictionary=word_dict):
+    """Takes a word and returns it's Levenshtein distances from all words in a dictionary."""
+    return sorted([(distance(word, w), w) for w in dictionary], key=itemgetter(0))
+
+def correct_spelling(word, method='autocorrect'):
+    """
+    :param method: Method by which to correct spelling, autocorrect or levenshtein
+    :return: Correctly spelled word.
+    """
+    if method == 'levenshtein':
+        return calc_distances(word)[0]
+    elif method == 'autocorrect':
+        return spell(word)
+    else:
+        raise NotImplementedError("Not a valid method choice.")
+
+
 machiavelli, montesquieu = fetch_all()
 
 stop_words = stopwords.words("english")
